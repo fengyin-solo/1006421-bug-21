@@ -4,6 +4,7 @@ import Dashboard from '@/views/Dashboard.vue'
 const Weighbridge = () => import('@/views/weighbridge/index.vue')
 const Pit = () => import('@/views/pit/index.vue')
 const Incinerator = () => import('@/views/incinerator/index.vue')
+const IncineratorDetail = () => import('@/views/incinerator/detail.vue')
 const Boiler = () => import('@/views/boiler/index.vue')
 const Turbine = () => import('@/views/turbine/index.vue')
 const Fluegas = () => import('@/views/fluegas/index.vue')
@@ -27,6 +28,7 @@ const router = createRouter({
     { path: '/weighbridge', name: 'weighbridge', component: Weighbridge },
     { path: '/pit', name: 'pit', component: Pit },
     { path: '/incinerator', name: 'incinerator', component: Incinerator },
+    { path: '/incinerator/:id', name: 'incinerator-detail', component: IncineratorDetail },
     { path: '/boiler', name: 'boiler', component: Boiler },
     { path: '/turbine', name: 'turbine', component: Turbine },
     { path: '/fluegas', name: 'fluegas', component: Fluegas },

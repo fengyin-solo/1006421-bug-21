@@ -13,6 +13,58 @@ export function moduleMeta(key: string): ModuleMeta {
   return meta
 }
 
+function isPending(meta: ModuleMeta, status: string): boolean {
+  if (meta.statusFlow) {
+    return (meta.statusFlow[status] ?? []).length > 0
+  }
+  return status !== meta.statuses[meta.statuses.length - 1]
+}
+
+/** 模块里用来排序的时间字段：取字段名中带「时间/日期」的第一个，没有就不排。 */
+function timeField(meta: ModuleMeta): string | null {
+  return meta.fields.find((field) => field.includes('时间') || field.includes('日期')) ?? null
+}
+
+/** 按时序铺开：同一模块的记录按时间字段从早到晚，时间相同保持入库顺序。 */
+function sortByTime(meta: ModuleMeta, rows: EntryRow[]): EntryRow[] {
+  const field = timeField(meta)
+  if (!field) {
+    return rows
+  }
+  return rows
+    .map((row, index) => ({ row, index, stamp: Date.parse(String(row[field] ?? '')) }))
+    .sort((a, b) => {
+      // 无法解析时间的排到最后，时间相同保持原顺序。
+      if (Number.isNaN(a.stamp) && Number.isNaN(b.stamp)) {
+        return a.index - b.index
+      }
+      if (Number.isNaN(a.stamp)) {
+        return 1
+      }
+      if (Number.isNaN(b.stamp)) {
+        return -1
+      }
+      return a.stamp - b.stamp || a.index - b.index
+    })
+    .map((item) => item.row)
+}
+
+export function canTransit(meta: ModuleMeta, current: string, target: string): boolean {
+  if (!meta.statusFlow) {
+    return true
+  }
+  return (meta.statusFlow[current] ?? []).includes(target)
+}
+
+/** 按流转表推导这条记录当前能做的动作，页面据此渲染，服务端（本地服务）仍是唯一裁决处。 */
+export function availableActions(meta: ModuleMeta, row: EntryRow): string[] {
+  const current = String(row.status)
+  return meta.actions.filter((action) => {
+    const target = meta.actionTargets[action]
+    return target && target !== current && canTransit(meta, current, target)
+  })
+}
+
 export function filterRows(rows: EntryRow[], filters: Record<string, string>): EntryRow[] {
   const pairs = Object.entries(filters).filter(([, value]) => value.trim() !== '')
   if (pairs.length === 0) {
@@ -24,8 +76,13 @@ export function filterRows(rows: EntryRow[], filters: Record<string, string>): E
 }
 
 export function listEntries(key: string, filters: Record<string, string> = {}): PageResult {
-  const matched = filterRows(listRows(key), filters)
+  const meta = moduleMeta(key)
+  const matched = filterRows(sortByTime(meta, listRows(key)), filters)
   return { items: matched, total: matched.length, page: 1, size: matched.length }
+}
+
+export function getEntry(key: string, id: number): EntryRow | null {
+  return listRows(key).find((row) => Number(row.id) === id) ?? null
 }
 
 export function runAction(key: string, id: number, action: string): ActionResult {
@@ -43,11 +100,15 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
-  const lastStatus = meta.statuses[meta.statuses.length - 1]
+  if (!canTransit(meta, current, target)) {
+    const route = (meta.statusFlow?.[current] ?? []).join('、')
+    const hint = route ? `，只能先流转到：${route}` : '，该状态为终态，不能再流转'
+    return { ok: false, message: `状态不允许跳级：「${current}」不能直接变为「${target}」${hint}` }
+  }
   const updated: EntryRow = {
     ...rows[index],
     status: target,
-    pending: target !== lastStatus,
+    pending: isPending(meta, target),
     abnormal: NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
   }
   const next = [...rows]
@@ -65,10 +126,10 @@ export function exportEntries(key: string): { filename: string; content: string 
   const meta = moduleMeta(key)
   const header = ['编号', ...meta.fields, '当前状态']
   const lines = [header.join(',')]
-  for (const row of listRows(key)) {
+  for (const row of sortByTime(meta, listRows(key))) {
     lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
   }
-  return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
+  return { filename: `${meta.name}-清单.csv`, content: `﻿${lines.join('\n')}` }
 }
 
 export function downloadEntries(key: string): void {

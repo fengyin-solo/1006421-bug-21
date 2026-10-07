@@ -47,7 +47,7 @@
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
-              v-for="action in actions"
+              v-for="action in actionsFor(row)"
               :key="action"
               class="link"
               type="button"
@@ -55,6 +55,7 @@
             >
               {{ action }}
             </button>
+            <span v-if="!actionsFor(row).length" class="muted">无可执行动作</span>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -74,6 +75,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  availableActions,
   downloadEntries,
   listEntries,
   moduleMeta,
@@ -83,9 +85,7 @@ import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('equipcheck')
 const columns = ["点检编号", "点检设备", "点检部位", "点检方法", "点检结果", "点检人员", "点检日期", "点检状态"]
-const actions = ["提交点检", "判定正常", "提出维修"]
 const statuses = ["待点检", "点检中", "状态正常", "需维修"]
-const stats = [{"label": "待点检设备", "value": 0}, {"label": "状态正常设备", "value": 0}, {"label": "需维修设备", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -98,6 +98,16 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+// 统计卡片实时反映待点检清单：焚烧炉初始化结论生成的待办也会计入。
+const stats = computed(() => [
+  { label: '待点检设备', value: rows.value.filter((row) => String(row.status) === '待点检').length },
+  { label: '状态正常设备', value: rows.value.filter((row) => String(row.status) === '状态正常').length },
+  { label: '需维修设备', value: rows.value.filter((row) => String(row.status) === '需维修').length },
+])
+
+function actionsFor(row: EntryRow): string[] {
+  return availableActions(meta, row)
+}
 
 function resetFilters() {
   filters.value = {}

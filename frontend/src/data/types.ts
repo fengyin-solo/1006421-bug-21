@@ -8,6 +8,8 @@ export type EntryRow = {
   [field: string]: string | number | boolean
 }
 
+export type EntriesSnapshot = Record<string, EntryRow[]>
+
 export type ModuleMeta = {
   key: string
   name: string
@@ -17,6 +19,8 @@ export type ModuleMeta = {
   statuses: string[]
   actions: string[]
   actionTargets: Record<string, string>
+  /** 状态流转表：当前状态允许前往的状态；未配置时保持原有自由流转。 */
+  statusFlow?: Record<string, string[]>
   metrics: string[]
 }
 

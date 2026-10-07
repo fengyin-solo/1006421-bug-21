@@ -1,15 +1,21 @@
 import { SEED_ROWS } from './seed'
-import type { EntryRow } from './types'
+import type { EntriesSnapshot, EntryRow } from './types'
 
 // 本地持久化：数据放在 localStorage 里，刷新、关掉再打开都还在。
 const STORAGE_KEY = 'waste-to-energy-plant:entries'
+
+export type { EntriesSnapshot }
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
-function readStorage(): Record<string, EntryRow[]> {
-  const fallback = clone(SEED_ROWS)
+function seedFallback(): EntriesSnapshot {
+  return clone(SEED_ROWS)
+}
+
+function readStorage(): EntriesSnapshot {
+  const fallback = seedFallback()
   if (typeof window === 'undefined' || !window.localStorage) {
     return fallback
   }
@@ -19,7 +25,7 @@ function readStorage(): Record<string, EntryRow[]> {
     return fallback
   }
   try {
-    const parsed = JSON.parse(raw) as Record<string, EntryRow[]>
+    const parsed = JSON.parse(raw) as EntriesSnapshot
     return { ...fallback, ...parsed }
   } catch {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback))
@@ -27,9 +33,9 @@ function readStorage(): Record<string, EntryRow[]> {
   }
 }
 
-let cache: Record<string, EntryRow[]> | null = null
+let cache: EntriesSnapshot | null = null
 
-export function allRows(): Record<string, EntryRow[]> {
+export function allRows(): EntriesSnapshot {
   if (cache === null) {
     cache = readStorage()
   }
@@ -52,6 +58,21 @@ export function resetRows(key: string): EntryRow[] {
   const rows = clone(SEED_ROWS[key] ?? [])
   saveRows(key, rows)
   return rows
+}
+
+/** 取当前整库的深拷贝，供准备脚本做「先抄底再覆盖」的备份。 */
+export function readSnapshot(): EntriesSnapshot {
+  return clone(allRows())
+}
+
+/** 整库一次性提交：缓存与 localStorage 同步替换；写失败时抛出，由调用方回滚备份。 */
+export function commitSnapshot(snapshot: EntriesSnapshot): void {
+  const next = clone(snapshot)
+  if (typeof window !== 'undefined' && window.localStorage) {
+    // 先写浏览器：setItem 配额超限等异常会在缓存改动前抛出，原数据不动，可以再试一次。
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  }
+  cache = next
 }
 
 export function storageKey(): string {

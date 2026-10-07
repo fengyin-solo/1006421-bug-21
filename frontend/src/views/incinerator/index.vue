@@ -43,11 +43,16 @@
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td v-for="column in columns" :key="column">
+            <RouterLink v-if="column === '运行编号'" class="link" :to="`/incinerator/${row.id}`">
+              {{ row[column] ?? '—' }}
+            </RouterLink>
+            <template v-else>{{ row[column] ?? '—' }}</template>
+          </td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
-              v-for="action in actions"
+              v-for="action in actionsFor(row)"
               :key="action"
               class="link"
               type="button"
@@ -55,6 +60,7 @@
             >
               {{ action }}
             </button>
+            <span v-if="!actionsFor(row).length" class="muted">无可执行动作</span>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -64,7 +70,7 @@
     </table>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条焚烧炉运行记录</span>
+      <span>共 {{ total }} 条焚烧炉运行记录（按记录时间从早到晚排列）</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -74,6 +80,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  availableActions,
   downloadEntries,
   listEntries,
   moduleMeta,
@@ -83,9 +90,7 @@ import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('incinerator')
 const columns = ["运行编号", "炉膛温度", "炉膛负压", "给料速率", "运行班次", "操作人员", "记录时间", "炉况状态"]
-const actions = ["提交点火", "登记停炉", "上报故障"]
 const statuses = ["待点火", "运行中", "已停炉", "故障停炉"]
-const stats = [{"label": "运行中炉次", "value": 0}, {"label": "已停炉炉次", "value": 0}, {"label": "故障停炉数", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -98,6 +103,16 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+// 概览卡片直接从当前炉次实时统计，不再停在 0。
+const stats = computed(() => [
+  { label: '运行中炉次', value: rows.value.filter((row) => String(row.status) === '运行中').length },
+  { label: '已停炉炉次', value: rows.value.filter((row) => String(row.status) === '已停炉').length },
+  { label: '故障停炉数', value: rows.value.filter((row) => String(row.status) === '故障停炉').length },
+])
+
+function actionsFor(row: EntryRow): string[] {
+  return availableActions(meta, row)
+}
 
 function resetFilters() {
   filters.value = {}
