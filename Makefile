@@ -1,4 +1,4 @@
-.PHONY: install frontend build
+.PHONY: install frontend build verify
 
 install:
 	cd frontend && npm install
@@ -8,3 +8,6 @@ frontend:
 
 build:
 	cd frontend && npm run build
+
+verify:
+	cd frontend && npm run verify:prepare

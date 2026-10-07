@@ -7,6 +7,7 @@
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记焚烧炉运行记录</button>
+        <button class="btn" type="button" @click="prepare">准备演示数据</button>
         <button class="btn" type="button" @click="exportRows">导出焚烧炉运行清单</button>
       </div>
     </header>
@@ -65,6 +66,7 @@
 
     <footer class="page-foot">
       <span>共 {{ total }} 条焚烧炉运行记录</span>
+      <span v-if="noticeMessage" class="notice-text">{{ noticeMessage }}</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -77,6 +79,7 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  prepareDemoData,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -85,13 +88,20 @@ const meta = moduleMeta('incinerator')
 const columns = ["运行编号", "炉膛温度", "炉膛负压", "给料速率", "运行班次", "操作人员", "记录时间", "炉况状态"]
 const actions = ["提交点火", "登记停炉", "上报故障"]
 const statuses = ["待点火", "运行中", "已停炉", "故障停炉"]
-const stats = [{"label": "运行中炉次", "value": 0}, {"label": "已停炉炉次", "value": 0}, {"label": "故障停炉数", "value": 0}]
+const statDefs = [{"label": "运行中炉次", "status": "运行中"}, {"label": "已停炉炉次", "status": "已停炉"}, {"label": "故障停炉数", "status": "故障停炉"}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const noticeMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const stats = computed(() =>
+  statDefs.map((item: { label: string; status: string }) => ({
+    label: item.label,
+    value: rows.value.filter((row) => String(row.status) === item.status).length,
+  })),
+)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -112,6 +122,16 @@ function openCreate() {
   errorMessage.value = '焚烧炉运行记录登记入口尚未接入审批流'
 }
 
+function prepare() {
+  const result = prepareDemoData()
+  reload()
+  if (result.ok) {
+    noticeMessage.value = result.message
+  } else {
+    errorMessage.value = result.message
+  }
+}
+
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
@@ -124,6 +144,7 @@ function runAction(action: string, row: EntryRow) {
 
 function reload() {
   errorMessage.value = ''
+  noticeMessage.value = ''
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items

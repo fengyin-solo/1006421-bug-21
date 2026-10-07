@@ -66,6 +66,29 @@ npm run build
 - 每个模块的页面在 `frontend/src/views/<模块>/index.vue`，页面只负责渲染，读写统一走
   `frontend/src/api/local-service.ts`。
 - 字段、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；示例数据在
-  `frontend/src/data/seed.ts`。
+  `frontend/src/data/seed.ts`；演示数据准备（灌什么、按什么键去重）在
+  `frontend/src/data/prepare.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
 - 想回到初始数据：清掉浏览器里 `waste-to-energy-plant:entries` 这一项，或调用 `resetModule(模块)`。
+
+## 演示数据准备
+
+演示焚烧炉等页面前，先在「运营概览」或「焚烧炉运行」页点 **准备演示数据**（逻辑在
+`local-service.ts` 的 `prepareDemoData`）：
+
+- 焚烧炉炉次按记录时间排开：历史炉次已停炉（含一次故障停炉）、当前炉次运行中、下一炉待点火，
+  炉膛温度、给料速率灌成接近现场的值；初始化的结论同步落到设备点检的「待点检」清单
+  （`EQUI-INIT-0001`）。
+- 按业务编号（运行编号 / 点检编号）去重合并：连跑多遍不会翻倍，本地既有记录原样保留，
+  旧版本堆出来的同编号重复记录会被清理。
+- 覆盖前先把当前整库快照备份到 `waste-to-energy-plant:entries:backup`；写入中途失败会按备份
+  回滚，可直接再点一次重试。
+- 炉况状态不允许跳级：只能从「待点火 → 运行中 → 已停炉」顺次流转，「故障停炉」只能由
+  运行中上报。
+
+验证这条链路（无需起 dev server，直接断言全部场景）：
+
+```bash
+cd frontend
+npm run verify:prepare
+```
